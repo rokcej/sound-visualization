@@ -5,6 +5,9 @@ class App {
 		window.app = this;
 		this.canvas = canvas;
 		//this.ctx = canvas.getContext("2d");
+
+		this.canvasSpec = document.getElementById("spectrogram");
+		this.ctxSpec = this.canvasSpec.getContext("2d")
 		
 		this.init();
 	}
@@ -40,14 +43,11 @@ class App {
 
 
 
-
-
-
 		// Video
 
 		this.scene = new THREE.Scene();
 		this.camera = new THREE.PerspectiveCamera(75, this.canvas.width / this.canvas.height, 0.1, 1000);
-		this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+		this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, preserveDrawingBuffer: true });
 
 		// const geometry = new THREE.BoxGeometry();
 		// const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
@@ -61,7 +61,7 @@ class App {
 		this.scene.add(this.ball)
 		this.ballOutline = new THREE.Mesh(
 			new THREE.IcosahedronGeometry(1.01, 16),
-			new THREE.MeshBasicMaterial({ color: 0xFFFFFF, wireframe: true, transparent: true, opacity: 0.3 })
+			new THREE.MeshBasicMaterial({ color: 0xFFFFFF, wireframe: true, transparent: true, opacity: 0.4 })
 		);
 		this.scene.add(this.ballOutline)
 
@@ -105,10 +105,14 @@ class App {
 
 		this.spectrum = [];
 		this.avgs = [];
-		for (let i = 0; i < 256; ++i) {
+		for (let i = 0; i < 128; ++i) {
 			this.spectrum.push(new Uint8Array(this.analyser.frequencyBinCount));
 			this.avgs.push(0);
 		}
+
+
+		this.canvasSpec.width = this.spectrum.length;
+		this.canvasSpec.height = this.data.length;
 
 		window.requestAnimationFrame(() => { this.update(); });
 	}
@@ -150,6 +154,8 @@ class App {
 		// for (let i = 7/8*this.data.length; i < 8/8*this.data.length; ++i)
 		// 	this.data[i] = 255;
 
+		this.drawSpectrogram();
+
 
 		let avg = 0;
 		for (let i = 0; i < this.data.length; ++i)
@@ -172,10 +178,10 @@ class App {
 		let t = performance.now() / 1000;
 		this.camera.position.set(
 			r * Math.sin(speed * t),
-			0.5,
+			0.6,
 			r * Math.cos(speed * t)
 		);
-		this.camera.lookAt(0, -0.5, 0);
+		this.camera.lookAt(0, -0.4, 0);
 
 
 		this.ballOutline.geometry.vertices.forEach((vertex, i) => {
@@ -204,18 +210,38 @@ class App {
 			let sc = this.spectrum[vi][ui] / 255;
 
             vertex.normalize();
-			vertex.multiplyScalar(1 + sc * (0.8 * this.avgs[vi] + 0.2));
+			vertex.multiplyScalar(1 + (0.4 * sc + 0.2) * this.avgs[vi]);
         });
         this.ballOutline.geometry.verticesNeedUpdate = true;
         this.ballOutline.geometry.normalsNeedUpdate = true;
         this.ballOutline.geometry.computeVertexNormals();
-        this.ballOutline.geometry.computeFaceNormals();
+		this.ballOutline.geometry.computeFaceNormals();
+		
+
+		let ballScale = 1 - avg * 0.3;
+		this.ball.scale.set(ballScale, ballScale, ballScale);
 
 
 
 		this.renderer.render(this.scene, this.camera);
 
 		window.requestAnimationFrame(() => { this.update(); });
+	}
+
+	drawSpectrogram() {
+		let pixels = this.ctxSpec.getImageData(0, 0, this.canvasSpec.width, this.canvasSpec.height);
+		for (let row = 0; row < pixels.height; ++row) {
+			for (let col = 0; col < pixels.width; ++col) {
+				let i = col / pixels.width * this.spectrum.length;
+				let j = this.spectrum[0].length - 1 - row / pixels.height * this.spectrum[0].length;
+				let val = this.spectrum[i][j];
+				pixels.data[(row * pixels.width + col) * 4 + 0] = val;
+				pixels.data[(row * pixels.width + col) * 4 + 1] = val;
+				pixels.data[(row * pixels.width + col) * 4 + 2] = val;
+				pixels.data[(row * pixels.width + col) * 4 + 3] = 255;
+			}
+		}
+		this.ctxSpec.putImageData(pixels, 0, 0);
 	}
 }
 
