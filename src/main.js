@@ -12,6 +12,202 @@ class App {
 		this.init();
 	}
 
+	getPeaks(buffer) {
+		let partLen = buffer.sampleRate / 2;
+		let numParts = buffer.length / partLen;
+
+
+		let l = buffer.getChannelData(0);
+		let r = buffer.getChannelData(1);
+		let peaks = [];
+
+		for (let i = 0; i < numParts; ++i) {
+			let max = { volume: 0, index: 0 };
+			for (let j = i * partLen; j < Math.min((i + 1) * partLen, buffer.length); ++j) {
+				let volume = (Math.abs(l[j]) + Math.abs(r[j])) * 0.5;
+				if (volume > max.volume) {
+					max.volume = volume;
+					max.index = j;
+				}
+			}
+			peaks.push(max);
+		}
+
+		peaks.sort((a, b) => {
+			return b.volume - a.volume;
+		});
+	
+		peaks = peaks.splice(0, Math.trunc(peaks.length * 0.5));
+	
+		peaks.sort((a, b) => {
+			return a.index - b.index;
+		});
+
+		return peaks;
+	}
+
+	getTempo(peaks, buffer) {
+		console.log("Getting tempo");
+
+		// [minBPM, maxBPM)
+		const minBPM = 90;
+		const maxBPM = 180;
+
+		let BPMs = new Map();
+
+		for (let i = 0; i < peaks.length; ++i) {
+			for (let j = i + 1; j < Math.min(i + 10, peaks.length); ++j) {
+				let BPM = 60 * buffer.sampleRate / (peaks[j].index - peaks[i].index);
+				
+				while (BPM < minBPM)
+					BPM *= 2;
+				while (BPM >= maxBPM)
+					BPM *= 0.5;
+
+				BPM = Math.round(BPM);
+
+				let offset = (peaks[i].index / buffer.sampleRate) % (60 / BPM);
+
+				if (BPMs.has(BPM)) {
+					let el = BPMs.get(BPM);
+					++el.count;
+					el.offset = ((el.count - 1) * el.offset + offset) / el.count;
+				} else {
+					BPMs.set(BPM, { count: 0, offset: offset });
+				}
+			}
+		}
+
+		let sorted = [];
+		for (let [BPM, el] of BPMs)
+			sorted.push({BPM: BPM, count: el.count, offset: el.offset});
+		sorted.sort((a, b) => { return b.count - a.count; });
+		
+		console.log(sorted);
+
+
+		let BPM = sorted[0].BPM;
+		let offset = 0;
+
+		let _peaks = peaks;
+		for (let acc = 1; acc <= 3; ++acc) {
+			let offs = new Map();
+			for (let i = 0; i < _peaks.length; ++i) {
+				let off = (_peaks[i].index / buffer.sampleRate) % (60 / BPM);
+
+				off = Math.round(off * Math.pow(10, acc));
+				if (offs.has(off)) {
+					let el = offs.get(off);
+					++el.count;
+					el._peaks.push(_peaks[i]);
+				} else {
+					offs.set(off, { count: 1, _peaks: [_peaks[i]] });
+				}
+			}
+			let maxCount = 0;
+			for (let [off, el] of offs) {
+				if (el.count > maxCount) {
+					offset = off / Math.pow(10, acc);
+					maxCount = el.count;
+					_peaks = el._peaks;
+				}
+			}
+			// console.log(offs);
+			// console.log(offset);
+			//console.log(_peaks);
+		}
+
+		// let BPM = sorted[0].BPM;
+		// let offs = new Map();
+		// for (let i = 0; i < _peaks.length; ++i) {
+		// 	let off = (_peaks[i].index / buffer.sampleRate) % (60 / bpm);
+
+		// 	off = Math.round(off * 100);
+		// 	if (offs.has(off))
+		// 		offs.set(off, offs.get(off) + 1);
+		// 	else
+		// 		offs.set(off, 1);
+		// }
+		// let offset = 0;
+		// let maxCount = 0;
+		// for (let [off, count] of offs) {
+		// 	if (count > maxCount) {
+		// 		offset = off / 100;
+		// 		maxCount = count;
+		// 	}
+		// }
+
+		console.log(offset);
+		//console.log(offs);
+
+		return { BPM: BPM, offset: offset };
+	}
+
+	beatDetection(buffer) {
+		let oac = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+		let source = oac.createBufferSource(buffer);
+		source.buffer = buffer;
+
+		let lowpass = oac.createBiquadFilter();
+		lowpass.type = "lowpass";
+		lowpass.frequency.value = 250;
+		lowpass.Q.value = 1;
+
+		var highpass = oac.createBiquadFilter();
+		highpass.type = "highpass";
+		highpass.frequency.value = 100;
+		highpass.Q.value = 1;
+
+
+		source.connect(lowpass);
+		lowpass.connect(highpass);
+		highpass.connect(oac.destination);
+		//source.connect(oac.destination);
+
+		source.start(0);
+		oac.startRendering();
+
+		oac.oncomplete = (e) => {
+			buffer = e.renderedBuffer;
+			
+			// let src = this.ac.createBufferSource();
+			// src.buffer = buffer;
+			// src.connect(this.analyser);
+			// src.connect(this.ac.destination);
+			// src.start(0);
+
+			let peaks = this.getPeaks(buffer);
+			let tempo = this.getTempo(peaks, buffer);
+			this.tempo = tempo;
+
+			console.log(tempo);
+
+			window.requestAnimationFrame(() => { this.update(); });
+		};
+	}
+
+	loadAudio() {
+		let xhr = new XMLHttpRequest();
+		xhr.open('GET', this.audio.src, true);
+		xhr.responseType = 'arraybuffer';
+		xhr.onload = () => {
+			this.ac.decodeAudioData(xhr.response, (buffer) => {
+				// this.source = this.ac.createBufferSource();
+				// this.source.buffer = buffer;
+
+				// this.source.connect(this.analyser);
+				// this.source.connect(this.ac.destination);
+
+				// this.canvas.onclick = () => {
+				// 	this.source.start(0);
+				// }
+
+				this.beatDetection(buffer);
+			});
+		}
+		xhr.send();
+	}
+
 	init() {
 		// Audio
 
@@ -27,6 +223,7 @@ class App {
 		this.analyser = this.ac.createAnalyser();
 		this.analyser.fftSize = 64;
 
+		this.loadAudio();
 
 		this.source = this.ac.createMediaElementSource(this.audio);
 		this.source.connect(this.analyser);
@@ -114,7 +311,7 @@ class App {
 		this.canvasSpec.width = this.spectrum.length;
 		this.canvasSpec.height = this.data.length;
 
-		window.requestAnimationFrame(() => { this.update(); });
+		// window.requestAnimationFrame(() => { this.update(); });
 	}
 
 	update() {
@@ -140,10 +337,21 @@ class App {
 		// }
 
 		//console.log(this.audio.currentTime);
-		
 
 
+		// if ((this.audio.currentTime - this.tempo.offset) % (60 / this.tempo.BPM) < 0.05)
+		// 	console.log("BEAT");
 
+		let beat = (this.audio.currentTime - this.tempo.offset) % (60 / this.tempo.BPM);
+		beat /= (60 / this.tempo.BPM);
+		beat *= beat;
+		beat = 1 - beat;
+		//console.log(beat);
+
+		if (Math.trunc((this.audio.currentTime - this.tempo.offset) / (60 / this.tempo.BPM)) % 4 == 3)
+			this.renderer.setClearColor(new THREE.Color(beat, beat, beat));
+		else
+			this.renderer.setClearColor(new THREE.Color(beat, 0, 0));
 		
 		this.spectrum.unshift(this.spectrum.pop());
 		this.data = this.spectrum[0];
