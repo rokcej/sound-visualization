@@ -30,3 +30,11 @@
 
 * Web Audio School - http://mmckegg.github.io/web-audio-school/
 
+
+# Temp
+
+https://gamedevelopment.tutsplus.com/tutorials/quick-tip-how-to-render-to-a-texture-in-threejs--cms-25686
+https://threejsfundamentals.org/threejs/lessons/threejs-rendertargets.html
+
+
+
