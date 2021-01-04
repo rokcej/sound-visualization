@@ -69,7 +69,7 @@ class App {
 		
 		this.player = new Player(this.ac, [this.ac.destination, this.analyser]);
 
-		this.loadAudio("/data/eminem_stan.mp3");
+		this.loadAudio("data/eminem_stan.mp3");
 
 		this.data = new Uint8Array(this.analyser.frequencyBinCount);
 
