@@ -1,20 +1,5 @@
 # Sound Visualization
 
-## TODO
-
-* Sound controls
-* Drag and drop audio file
-* Progress bar
-
-
-## Sound properties
-
-* Frequency spectrum
-* Waveform
-* Beats / tempo
-* Remaining time
-
-
 ## References
 
 * Web Audio API - https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API
@@ -29,12 +14,3 @@
 ## Interesting links
 
 * Web Audio School - http://mmckegg.github.io/web-audio-school/
-
-
-# Temp
-
-https://gamedevelopment.tutsplus.com/tutorials/quick-tip-how-to-render-to-a-texture-in-threejs--cms-25686
-https://threejsfundamentals.org/threejs/lessons/threejs-rendertargets.html
-
-
-

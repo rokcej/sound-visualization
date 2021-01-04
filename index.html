@@ -12,6 +12,67 @@
 	<script type="module" src="src/main.js" ></script>
 
 
+	<script type="x-shader/x-vertex" id="bg_vert">
+void main() {
+	gl_Position = vec4( position, 1.0 );    
+}
+	</script>
+
+	<script type="x-shader/x-fragment" id="bg_frag">		
+#define M_PI    3.141592653589793238462643
+
+
+uniform sampler2D particleTex;
+uniform sampler2D ballTex;
+
+uniform vec2 resolution;
+uniform float time;
+uniform float beat;
+uniform float avg;
+uniform uint beat_idx;
+
+
+// Map random number to 2D position
+// https://stackoverflow.com/a/4275343/4808188
+float rand_constant(vec2 xy) {
+    return fract(sin(dot(xy.xy, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main(){
+	vec2 uv = gl_FragCoord.xy / resolution;
+
+	vec2 uvOff = vec2(0.0);
+	float lum = 0.0;
+	if (beat_idx % 4u == 3u) {
+		float rand = rand_constant(vec2(float(beat_idx)));
+		uvOff = vec2(8.0 * beat * beat / resolution.y);
+		if (rand < 0.25)
+			uvOff.x *= -1.0;
+		else if(rand < 0.5)
+			uvOff.y *= -1.0;
+		else if (rand < 0.75) {
+			uvOff.x *= -1.0;
+			uvOff.y *= -1.0;
+		}
+
+		float noise = rand_constant(mod(gl_FragCoord.xy + time, 100000.0));
+		lum = beat * (0.75 + noise * 0.25) * 0.3;
+	}
+
+	vec4 particleColor = texture2D(particleTex, uv + uvOff);
+	vec4 ballColor = texture2D(ballTex, uv + uvOff);
+	vec3 color = ballColor.rgb + (1.0 - ballColor.a) * particleColor.rgb;
+	
+	color += lum;
+
+	gl_FragColor = vec4(color, 1.0);
+	
+}
+	</script>
+
+
+
+
 	<script type="x-shader/x-vertex" id="ball_vert">
 #define M_PI    3.141592653589793238462643
 #define M_SQRT2 1.414213562373095048801689
@@ -122,9 +183,9 @@ float perlinNoise3D(vec3 xyz, int octaves) {
 }
 
 void main() {
-	float noise = perlinNoise3D(position + time * 0.0, 1);
+	float noise = perlinNoise3D(position * 1.0 + time * 0.5, 1);
 
-	float scale = 1.5 + 3.5 * noise * avg;
+	float scale = 1.0 + 5.0 * noise * avg;
 
 	vec4 mvPosition = modelViewMatrix * vec4(position * scale, 1.0 );
 
@@ -331,14 +392,29 @@ void main() {
 
 </head>
 <body>
+	<span id="fpsContainer"><span id="fps">0</span> FPS</span>
 	<div>
-		<canvas id="canvas" width="1600" height="900"></canvas>
+		<canvas id="canvas" width="1280" height="720"></canvas>
 	</div>
-	<div>
-		<audio id="audio" src="data/kda_villain.mp3" controls></audio>
-	</div>
-	<div>
+	<div id="info">
+		<div>
+			<div class="info">
+				Offset: <span id="offset">N/A</span> s
+			</div>
+			<div class="info">
+				BPM: <span id="tempo">N/A</span>
+			</div>
+		</div>
 		<canvas id="spectrogram"></canvas>
+	</div>
+	<div id="controls">
+		<span id="play" class="button">Play</span>
+		<span id="pause" class="button">Pause</span>
+		<span id="stop" class="button">Stop</span>
+		<label class="button">
+			Upload song
+			<input type="file" id="fileInput" accept="audio/*" />
+		</label>
 	</div>
 </body>
 </html>
